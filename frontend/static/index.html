@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KMU-OS — Unternehmens-Cockpit</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --card: #ffffff; --ink: #2b2620; --muted: #7a7265;
+    --accent: #c0653a; --accent-soft: #f3e2d8; --ok: #3e7d4f; --warn: #b07b1e; --crit: #a83a32;
+    --border: #e3ddd1;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Georgia, 'Times New Roman', serif; background: var(--bg); color: var(--ink); }
+  header { padding: 28px 40px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; gap: 16px; }
+  header h1 { margin: 0; font-size: 26px; font-weight: 600; }
+  header h1 em { color: var(--accent); font-style: italic; }
+  header .sub { color: var(--muted); font-size: 14px; }
+  nav { display: flex; gap: 4px; padding: 0 40px; border-bottom: 1px solid var(--border); background: var(--card); }
+  nav button { border: none; background: none; font: inherit; padding: 12px 18px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
+  nav button.active { color: var(--ink); border-bottom-color: var(--accent); }
+  main { padding: 28px 40px; max-width: 1100px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+  .card .label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .card .value { font-size: 30px; margin-top: 6px; }
+  .card .value.eur::after { content: " €"; font-size: 18px; color: var(--muted); }
+  h2 { font-size: 18px; margin: 30px 0 12px; }
+  .finding { padding: 10px 14px; border-left: 4px solid var(--muted); background: var(--card); border-radius: 0 8px 8px 0; margin-bottom: 8px; font-size: 15px; }
+  .finding.kritisch { border-left-color: var(--crit); }
+  .finding.warnung { border-left-color: var(--warn); }
+  .finding.info { border-left-color: var(--ok); }
+  .finding .area { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  #chat-log { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; min-height: 220px; max-height: 480px; overflow-y: auto; }
+  .msg { margin-bottom: 14px; line-height: 1.5; }
+  .msg.user { color: var(--accent); }
+  .msg .who { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .msg pre { white-space: pre-wrap; font: inherit; margin: 4px 0 0; }
+  .sources { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  form.ask { display: flex; gap: 10px; margin-top: 14px; }
+  form.ask input { flex: 1; padding: 12px 14px; font: inherit; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+  button.primary { background: var(--accent); color: #fff; border: none; padding: 12px 22px; border-radius: 8px; font: inherit; cursor: pointer; }
+  button.primary:disabled { opacity: .5; cursor: wait; }
+  .hint { color: var(--muted); font-size: 14px; }
+  #ai-suggestions { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; white-space: pre-wrap; line-height: 1.55; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 13px; }
+  section { display: none; }
+  section.active { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>KMU-<em>OS</em></h1>
+  <span class="sub" id="company">Unternehmens-Cockpit</span>
+  <span class="pill" id="ai-status">KI: prüfe …</span>
+</header>
+<nav>
+  <button data-tab="dashboard" class="active">Dashboard</button>
+  <button data-tab="assistant">Firmen-Assistent</button>
+  <button data-tab="insights">KI-Insights</button>
+</nav>
+<main>
+  <section id="dashboard" class="active">
+    <h2>Kennzahlen aller Bereiche</h2>
+    <div class="grid" id="kpi-grid"><div class="hint">Lade Kennzahlen …</div></div>
+  </section>
+
+  <section id="assistant">
+    <h2>Firmen-Assistent <span class="hint">— kennt SOPs, Regeln, Kunden, Projekte &amp; Zahlen</span></h2>
+    <div id="chat-log"><div class="hint">Stellen Sie eine Frage, z.&nbsp;B. „Wie läuft unser Onboarding-Prozess?" oder „Welche Rechnungen sind überfällig?"</div></div>
+    <form class="ask" id="chat-form">
+      <input id="chat-input" placeholder="Frage an das Unternehmen stellen …" autocomplete="off">
+      <button class="primary" id="chat-send">Fragen</button>
+    </form>
+  </section>
+
+  <section id="insights">
+    <h2>Befunde</h2>
+    <div id="findings"><div class="hint">Lade …</div></div>
+    <h2>KI-Verbesserungsvorschläge</h2>
+    <div id="ai-suggestions" class="hint">Lade …</div>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+
+document.querySelectorAll("nav button").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll("main section").forEach(s => s.classList.remove("active"));
+  btn.classList.add("active");
+  $("#" + btn.dataset.tab).classList.add("active");
+  if (btn.dataset.tab === "insights") loadInsights();
+}));
+
+const fmt = (n) => Number(n).toLocaleString("de-DE", {minimumFractionDigits: 0, maximumFractionDigits: 2});
+
+async function loadStatus() {
+  const [health, status] = await Promise.all([
+    fetch("/api/health").then(r => r.json()),
+    fetch("/api/ai/status").then(r => r.json()),
+  ]);
+  $("#company").textContent = health.company;
+  $("#ai-status").textContent = status.llm_available
+    ? `KI aktiv · ${status.indexed_chunks} Chunks indexiert`
+    : `KI offline (kein API-Key) · ${status.indexed_chunks} Chunks indexiert`;
+}
+
+async function loadKpis() {
+  const k = await fetch("/api/ai/kpis").then(r => r.json());
+  const cards = [
+    ["Umsatz (netto)", fmt(k.finanzen.umsatz_gesamt_netto), "eur"],
+    ["Ergebnis (netto)", fmt(k.finanzen.ergebnis_netto), "eur"],
+    ["Offene Rechnungen", k.finanzen.offene_rechnungen],
+    ["Überfällig", k.finanzen.ueberfaellige_rechnungen],
+    ["Kunden", k.vertrieb.kunden_gesamt],
+    ["Leads", k.vertrieb.leads],
+    ["Mitarbeitende", k.personal.mitarbeiter_aktiv],
+    ["Aktive Projekte", k.projekte.projekte_aktiv],
+    ["Offene Aufgaben", k.projekte.aufgaben_offen],
+    ["Wissensdokumente", k.wissen.dokumente],
+  ];
+  $("#kpi-grid").innerHTML = cards.map(([label, value, cls]) =>
+    `<div class="card"><div class="label">${label}</div><div class="value ${cls || ""}">${value}</div></div>`
+  ).join("");
+}
+
+async function loadInsights() {
+  $("#findings").innerHTML = '<div class="hint">Analysiere …</div>';
+  $("#ai-suggestions").textContent = "Claude analysiert die gebündelten Unternehmensdaten …";
+  const data = await fetch("/api/ai/insights").then(r => r.json());
+  $("#findings").innerHTML = data.findings.length
+    ? data.findings.map(f => `<div class="finding ${f.severity}"><span class="area">${f.area} · ${f.severity}</span><br>${f.message}</div>`).join("")
+    : '<div class="hint">Keine Auffälligkeiten erkannt.</div>';
+  $("#ai-suggestions").textContent = data.ai_suggestions;
+}
+
+$("#chat-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = $("#chat-input"), log = $("#chat-log"), btn = $("#chat-send");
+  const question = input.value.trim();
+  if (!question) return;
+  if (log.querySelector(".hint")) log.innerHTML = "";
+  log.insertAdjacentHTML("beforeend", `<div class="msg user"><div class="who">Sie</div>${question}</div>`);
+  input.value = ""; btn.disabled = true;
+  log.scrollTop = log.scrollHeight;
+  try {
+    const data = await fetch("/api/ai/chat", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({question}),
+    }).then(r => r.json());
+    const sources = data.sources.length
+      ? `<div class="sources">Quellen: ${[...new Set(data.sources.map(s => s.title))].join(" · ")}</div>` : "";
+    const div = document.createElement("div");
+    div.className = "msg";
+    div.innerHTML = `<div class="who">KMU-OS Assistent</div><pre></pre>${sources}`;
+    div.querySelector("pre").textContent = data.answer;
+    log.appendChild(div);
+  } catch {
+    log.insertAdjacentHTML("beforeend", `<div class="msg"><div class="who">Fehler</div>Anfrage fehlgeschlagen.</div>`);
+  }
+  btn.disabled = false;
+  log.scrollTop = log.scrollHeight;
+});
+
+loadStatus(); loadKpis();
+</script>
+</body>
+</html>
