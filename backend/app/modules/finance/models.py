@@ -2,21 +2,24 @@
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ...core.database import Base
+from ...core.tenancy import TenantMixin
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class Invoice(Base):
+class Invoice(TenantMixin, Base):
     __tablename__ = "finance_invoices"
+    # Rechnungsnummern sind pro Firma fortlaufend/eindeutig, nicht global
+    __table_args__ = (UniqueConstraint("tenant_id", "number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    number: Mapped[str] = mapped_column(String(50), index=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("crm_customers.id"), index=True)
     description: Mapped[str | None] = mapped_column(Text)
     amount_net: Mapped[float] = mapped_column(Float)        # Netto in EUR
@@ -31,7 +34,7 @@ class Invoice(Base):
         return round(self.amount_net * (1 + self.vat_rate / 100), 2)
 
 
-class Expense(Base):
+class Expense(TenantMixin, Base):
     __tablename__ = "finance_expenses"
 
     id: Mapped[int] = mapped_column(primary_key=True)

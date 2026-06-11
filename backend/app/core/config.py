@@ -13,8 +13,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="KMUOS_", env_file=".env", extra="ignore")
 
     app_name: str = "KMU-OS"
-    company_name: str = "Musterfirma GmbH"
+    company_name: str = "Musterfirma GmbH"  # Default-Name beim Bootstrap/CLI-Seed
     database_url: str = "sqlite:///./kmuos.db"
+
+    # Sicherheit / Auth
+    secret_key: str = "dev-secret-bitte-aendern"  # in Produktion zwingend setzen!
+    token_expire_hours: int = 12
+    # SaaS: dürfen sich neue Firmen selbst registrieren? (Self-Hosted: aus)
+    allow_signup: bool = False
+
+    # Hintergrund-Scheduler für zeitgesteuerte Automationen
+    scheduler_enabled: bool = True
 
     # KI-Konfiguration (Anthropic Claude)
     anthropic_model: str = "claude-opus-4-8"

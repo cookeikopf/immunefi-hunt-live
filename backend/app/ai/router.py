@@ -6,14 +6,16 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ..core.database import get_db
+from ..modules.auth.deps import get_tenant_db, require_module
 from . import llm
 from .assistant import ask
 from .datahub import collect_kpis
 from .insights import generate_insights
 from .rag.indexer import reindex_all, retriever, vector_store
 
-router = APIRouter(prefix="/api/ai", tags=["KI"])
+router = APIRouter(
+    prefix="/api/ai", dependencies=[Depends(require_module("ai"))], tags=["KI"]
+)
 
 
 class ChatRequest(BaseModel):
@@ -27,7 +29,7 @@ class SearchRequest(BaseModel):
 
 
 @router.get("/status")
-def ai_status(db: Session = Depends(get_db)):
+def ai_status(db: Session = Depends(get_tenant_db)):
     return {
         "llm_available": llm.is_available(),
         "indexed_chunks": vector_store.count(db),
@@ -35,12 +37,12 @@ def ai_status(db: Session = Depends(get_db)):
 
 
 @router.get("/kpis")
-def kpis(db: Session = Depends(get_db)):
+def kpis(db: Session = Depends(get_tenant_db)):
     return collect_kpis(db)
 
 
 @router.post("/chat")
-def chat(request: ChatRequest, db: Session = Depends(get_db)):
+def chat(request: ChatRequest, db: Session = Depends(get_tenant_db)):
     result = ask(db, request.question, request.top_k)
     return {
         "answer": result.answer,
@@ -50,17 +52,17 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/search")
-def search(request: SearchRequest, db: Session = Depends(get_db)):
+def search(request: SearchRequest, db: Session = Depends(get_tenant_db)):
     """Reine RAG-Suche ohne LLM — zeigt, welches Wissen gefunden wird."""
     return {"results": [asdict(c) for c in retriever.retrieve(db, request.query, request.top_k)]}
 
 
 @router.get("/insights")
-def insights(db: Session = Depends(get_db)):
+def insights(db: Session = Depends(get_tenant_db)):
     return generate_insights(db)
 
 
 @router.post("/reindex")
-def reindex(db: Session = Depends(get_db)):
+def reindex(db: Session = Depends(get_tenant_db)):
     counts = reindex_all(db)
     return {"reindexed": counts, "total_chunks": vector_store.count(db)}

@@ -85,10 +85,13 @@ def index_document(db: Session, doc: KnowledgeDocument) -> int:
 
 
 def reindex_all(db: Session) -> dict[str, int]:
-    """Baut den kompletten RAG-Index neu auf."""
+    """Baut den RAG-Index des aktuellen Mandanten neu auf."""
     from .vectorstore import RagChunk
 
-    db.query(RagChunk).delete()
+    tenant_id = db.info.get("tenant_id")
+    if tenant_id is None:
+        raise RuntimeError("reindex_all benötigt eine mandanten-gebundene Session")
+    db.query(RagChunk).filter(RagChunk.tenant_id == tenant_id).delete()
     db.commit()
 
     counts = {"knowledge": 0, "crm": 0, "projects": 0, "hr": 0}
@@ -128,13 +131,17 @@ def _on_event(event: str, payload: dict[str, Any]) -> None:
     spec = _SOURCE_LOADERS.get(prefix)
     if spec is None or "id" not in payload:
         return
+    if payload.get("tenant_id") is None:
+        logger.warning("Event %s ohne tenant_id — Indexierung übersprungen", event)
+        return
     model, source, to_text, to_title = spec
     db = SessionLocal()
+    db.info["tenant_id"] = payload["tenant_id"]
     try:
         if action == "deleted":
             vector_store.remove(db, source, str(payload["id"]))
             return
-        obj = db.get(model, payload["id"])
+        obj = db.query(model).filter(model.id == payload["id"]).first()
         if obj is None:
             return
         chunks = chunk_text(to_text(obj), settings.rag_chunk_size, settings.rag_chunk_overlap)

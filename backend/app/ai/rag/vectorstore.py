@@ -13,10 +13,11 @@ from sqlalchemy import DateTime, String, Text
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from ...core.database import Base
+from ...core.tenancy import TenantMixin
 from .embeddings import Embedder, cosine
 
 
-class RagChunk(Base):
+class RagChunk(TenantMixin, Base):
     __tablename__ = "rag_chunks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -53,11 +54,15 @@ class VectorStore:
         return len(chunks)
 
     def remove(self, db: Session, source: str, source_id: str) -> int:
-        deleted = (
-            db.query(RagChunk)
-            .filter(RagChunk.source == source, RagChunk.source_id == source_id)
-            .delete()
+        query = db.query(RagChunk).filter(
+            RagChunk.source == source, RagChunk.source_id == source_id
         )
+        # Expliziter Tenant-Filter zusätzlich zur zentralen Loader-Criteria —
+        # Bulk-Deletes dürfen nie über Mandantengrenzen hinweg löschen.
+        tenant_id = db.info.get("tenant_id")
+        if tenant_id is not None:
+            query = query.filter(RagChunk.tenant_id == tenant_id)
+        deleted = query.delete()
         db.commit()
         return deleted
 
@@ -69,9 +74,13 @@ class VectorStore:
         self, db: Session, query: str, top_k: int = 6
     ) -> list[tuple[RagChunk, float]]:
         query_vec = self.embedder.embed(query)
+        chunk_query = db.query(RagChunk)
+        tenant_id = db.info.get("tenant_id")
+        if tenant_id is not None:  # Defense-in-Depth zusätzlich zur Loader-Criteria
+            chunk_query = chunk_query.filter(RagChunk.tenant_id == tenant_id)
         scored = [
             (chunk, cosine(query_vec, chunk.embedding))
-            for chunk in db.query(RagChunk).all()
+            for chunk in chunk_query.all()
         ]
         scored.sort(key=lambda pair: pair[1], reverse=True)
         return scored[:top_k]

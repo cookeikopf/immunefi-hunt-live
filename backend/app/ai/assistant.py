@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
+from ..core.tenancy import current_tenant
 from . import llm
 from .datahub import company_snapshot_text
 from .rag.indexer import retriever
@@ -51,7 +52,8 @@ def _build_context(snapshot: str, chunks: list[RetrievedChunk]) -> str:
 def ask(db: Session, question: str, top_k: int | None = None) -> AssistantAnswer:
     chunks = retriever.retrieve(db, question, top_k or settings.rag_top_k)
     context = _build_context(company_snapshot_text(db), chunks)
-    system = _SYSTEM_TEMPLATE.format(company=settings.company_name)
+    tenant = current_tenant(db)
+    system = _SYSTEM_TEMPLATE.format(company=tenant.name if tenant else settings.company_name)
     user_message = f"Kontext:\n{context}\n\nFrage: {question}"
     answer = llm.complete(system, user_message)
     return AssistantAnswer(answer=answer, sources=chunks)

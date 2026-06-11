@@ -6,13 +6,14 @@ from sqlalchemy import Date, DateTime, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...core.database import Base
+from ...core.tenancy import TenantMixin
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class Project(Base):
+class Project(TenantMixin, Base):
     __tablename__ = "projects"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -27,7 +28,7 @@ class Project(Base):
     tasks: Mapped[list["Task"]] = relationship(back_populates="project", cascade="all, delete-orphan")
 
 
-class Task(Base):
+class Task(TenantMixin, Base):
     __tablename__ = "project_tasks"
 
     id: Mapped[int] = mapped_column(primary_key=True)

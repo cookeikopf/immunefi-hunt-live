@@ -6,13 +6,14 @@ from sqlalchemy import Date, DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...core.database import Base
+from ...core.tenancy import TenantMixin
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class Employee(Base):
+class Employee(TenantMixin, Base):
     __tablename__ = "hr_employees"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -32,7 +33,7 @@ class Employee(Base):
     )
 
 
-class Absence(Base):
+class Absence(TenantMixin, Base):
     __tablename__ = "hr_absences"
 
     id: Mapped[int] = mapped_column(primary_key=True)

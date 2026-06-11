@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
+from ..core.tenancy import current_tenant
 from . import llm
 from .datahub import collect_kpis, company_snapshot_text
 
@@ -90,8 +91,9 @@ def generate_insights(db: Session) -> dict:
         "kennzahlen": kpis,
         "befunde": [asdict(f) for f in findings],
     }
+    tenant = current_tenant(db)
     ai_suggestions = llm.complete(
-        _SYSTEM.format(company=settings.company_name),
+        _SYSTEM.format(company=tenant.name if tenant else settings.company_name),
         "Unternehmensdaten:\n"
         + company_snapshot_text(db)
         + "\n\nDetails (JSON):\n"

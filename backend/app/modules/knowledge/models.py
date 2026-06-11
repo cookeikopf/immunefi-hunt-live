@@ -10,13 +10,14 @@ from sqlalchemy import DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ...core.database import Base
+from ...core.tenancy import TenantMixin
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class KnowledgeDocument(Base):
+class KnowledgeDocument(TenantMixin, Base):
     __tablename__ = "knowledge_documents"
 
     id: Mapped[int] = mapped_column(primary_key=True)

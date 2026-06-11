@@ -6,13 +6,14 @@ from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...core.database import Base
+from ...core.tenancy import TenantMixin
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class Customer(Base):
+class Customer(TenantMixin, Base):
     __tablename__ = "crm_customers"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -30,7 +31,7 @@ class Customer(Base):
     )
 
 
-class Interaction(Base):
+class Interaction(TenantMixin, Base):
     """Kontaktpunkt mit einem Kunden (Anruf, E-Mail, Termin …)."""
 
     __tablename__ = "crm_interactions"
