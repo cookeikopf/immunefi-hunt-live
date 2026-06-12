@@ -5,6 +5,7 @@ import { registerAuthPages } from "./pages/auth.js";
 import { registerCorePages } from "./pages/core.js";
 import { registerModulePages } from "./pages/modules.js";
 import { registerAdminPages } from "./pages/admin.js";
+import { registerBuilderPages, ensureCustomModules } from "./pages/builder.js";
 
 export const state = { me: null, setupStatus: null };
 
@@ -52,6 +53,7 @@ export async function loadMe() {
   document.getElementById("company").textContent = state.me.tenant.name;
   document.getElementById("who").textContent = `${state.me.display_name} (${state.me.role})`;
   refreshHeaderStatus();
+  await ensureCustomModules(); // dynamische Seiten der Custom-Module registrieren
 }
 
 async function route() {
@@ -89,11 +91,8 @@ document.getElementById("logout").addEventListener("click", () => {
 registerAuthPages();
 registerCorePages();
 registerModulePages();
+registerBuilderPages();
 registerAdminPages();
-// Erweiterungen späterer Etappen (werden geladen, wenn vorhanden)
-for (const extra of ["builder", "workflows"]) {
-  try { (await import(`./pages/${extra}.js`)).default?.(); } catch { /* noch nicht gebaut */ }
-}
 
 window.addEventListener("hashchange", route);
 

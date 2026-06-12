@@ -78,7 +78,22 @@ def collect_kpis(db: Session) -> dict:
             "sops": db.query(KnowledgeDocument).filter(KnowledgeDocument.doc_type == "sop").count(),
             "regeln": db.query(KnowledgeDocument).filter(KnowledgeDocument.doc_type == "regel").count(),
         },
+        "custom": _custom_kpis(db),
     }
+
+
+def _custom_kpis(db: Session) -> dict:
+    """Kennzahlen der vom Builder erzeugten Custom-Module."""
+    from ..builder.models import CustomModule, CustomRecord
+
+    result = {}
+    for module in db.query(CustomModule).filter(CustomModule.status == "aktiv").all():
+        result[module.slug] = {
+            "name": module.name_plural or module.name,
+            "eintraege": db.query(CustomRecord)
+            .filter(CustomRecord.module_id == module.id).count(),
+        }
+    return result
 
 
 def company_snapshot_text(db: Session) -> str:
@@ -98,4 +113,9 @@ def company_snapshot_text(db: Session) -> str:
         f"- Wissensbasis: {k['wissen']['dokumente']} Dokumente "
         f"({k['wissen']['sops']} SOPs, {k['wissen']['regeln']} Regeln)",
     ]
+    if k["custom"]:
+        custom_parts = ", ".join(
+            f"{info['name']}: {info['eintraege']} Einträge" for info in k["custom"].values()
+        )
+        lines.append(f"- Eigene Module: {custom_parts}")
     return "\n".join(lines)

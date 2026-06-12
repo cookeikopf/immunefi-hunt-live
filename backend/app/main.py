@@ -12,6 +12,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .ai.router import router as ai_router
+from .builder.router import records_router as custom_records_router
+from .builder.router import router as builder_router
 from .core.config import get_settings
 from .core.database import init_db
 from .imports.router import router as imports_router
@@ -57,6 +59,8 @@ app.include_router(finance_router)
 app.include_router(hr_router)
 app.include_router(projects_router)
 app.include_router(knowledge_router)
+app.include_router(builder_router)
+app.include_router(custom_records_router)
 app.include_router(ai_router)
 
 
