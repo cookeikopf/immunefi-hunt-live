@@ -49,11 +49,16 @@ def _build_context(snapshot: str, chunks: list[RetrievedChunk]) -> str:
     return "\n".join(parts)
 
 
-def ask(db: Session, question: str, top_k: int | None = None) -> AssistantAnswer:
+def ask(
+    db: Session,
+    question: str,
+    top_k: int | None = None,
+    history: list[dict] | None = None,
+) -> AssistantAnswer:
     chunks = retriever.retrieve(db, question, top_k or settings.rag_top_k)
     context = _build_context(company_snapshot_text(db), chunks)
     tenant = current_tenant(db)
     system = _SYSTEM_TEMPLATE.format(company=tenant.name if tenant else settings.company_name)
     user_message = f"Kontext:\n{context}\n\nFrage: {question}"
-    answer = llm.complete(system, user_message)
+    answer = llm.complete(system, user_message, history=history)
     return AssistantAnswer(answer=answer, sources=chunks)

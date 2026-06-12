@@ -80,8 +80,17 @@ export function registerCorePages() {
   registerPage("assistant", {
     title: "Firmen-Assistent", nav: true, module: "ai",
     async render(main) {
+      let conversationId = null;
+
       main.append(el("h2", {}, "Firmen-Assistent ",
         el("span", { class: "hint" }, "— kennt SOPs, Regeln, Kunden, Projekte & Zahlen")));
+
+      const picker = el("select", { style: "max-width:320px" },
+        el("option", { value: "" }, "Neue Unterhaltung"));
+      const newButton = el("button", { class: "ghost small" }, "+ Neu");
+      main.append(el("div", { class: "frow", style: "margin-bottom:10px" },
+        el("div", { class: "field", style: "flex:0 1 340px" }, picker), newButton));
+
       const log = el("div", { id: "chat-log" },
         el("p", { class: "hint" },
           'Fragen Sie z. B.: „Wie läuft unser Onboarding?" oder „Welche Rechnungen sind überfällig?"'));
@@ -91,28 +100,97 @@ export function registerCorePages() {
         el("div", { class: "field", style: "flex:1" }, input), button);
       main.append(log, form);
 
+      const addMessage = (who, text, cls = "", sources = []) => {
+        if (log.querySelector(".hint")) log.innerHTML = "";
+        const node = el("div", { class: `msg ${cls}` },
+          el("div", { class: "who" }, who), el("pre", {}, text));
+        if (sources.length)
+          node.append(el("div", { class: "sources" }, "Quellen: " + sources.join(" · ")));
+        log.append(node);
+        log.scrollTop = log.scrollHeight;
+      };
+
+      try {
+        for (const conv of await api("/api/ai/conversations"))
+          picker.append(el("option", { value: conv.id }, conv.title));
+      } catch { /* keine Historie */ }
+
+      picker.addEventListener("change", async () => {
+        log.innerHTML = "";
+        conversationId = picker.value ? Number(picker.value) : null;
+        if (!conversationId) return;
+        const detail = await api(`/api/ai/conversations/${conversationId}`);
+        for (const message of detail.messages)
+          addMessage(message.role === "user" ? "Sie" : "KMU-OS Assistent",
+            message.content, message.role === "user" ? "user" : "");
+      });
+      newButton.addEventListener("click", () => {
+        conversationId = null; picker.value = ""; log.innerHTML = "";
+        log.append(el("p", { class: "hint" }, "Neue Unterhaltung gestartet."));
+      });
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const question = input.value.trim();
         if (!question) return;
-        if (log.querySelector(".hint")) log.innerHTML = "";
-        log.append(el("div", { class: "msg user" }, el("div", { class: "who" }, "Sie"), question));
+        addMessage("Sie", question, "user");
         input.value = ""; button.disabled = true;
-        log.scrollTop = log.scrollHeight;
         try {
-          const data = await api("/api/ai/chat", { method: "POST", body: { question } });
-          const sourceTitles = [...new Set(data.sources.map((s) => s.title))];
-          const answer = el("div", { class: "msg" },
-            el("div", { class: "who" }, "KMU-OS Assistent"),
-            el("pre", {}, data.answer));
-          if (sourceTitles.length)
-            answer.append(el("div", { class: "sources" }, "Quellen: " + sourceTitles.join(" · ")));
-          log.append(answer);
+          const data = await api("/api/ai/chat", {
+            method: "POST",
+            body: { question, conversation_id: conversationId },
+          });
+          if (!conversationId) {
+            conversationId = data.conversation_id;
+            picker.append(el("option", { value: conversationId, selected: "selected" },
+              question.slice(0, 60)));
+            picker.value = String(conversationId);
+          }
+          addMessage("KMU-OS Assistent", data.answer, "",
+            [...new Set(data.sources.map((s) => s.title))]);
         } catch (err) {
-          log.append(el("div", { class: "msg" }, el("div", { class: "who" }, "Fehler"), err.message));
+          addMessage("Fehler", err.message);
         }
         button.disabled = false;
-        log.scrollTop = log.scrollHeight;
+      });
+    },
+  });
+
+  registerPage("report", {
+    title: "Wochenbericht", nav: true, module: "ai",
+    async render(main) {
+      main.append(el("h2", {}, "Wochenbericht ",
+        el("span", { class: "hint" }, "— Lage, Entwicklung und Prioritäten der Woche")));
+      const button = el("button", { class: "primary" }, "Bericht erstellen");
+      const out = el("div", { style: "margin-top:14px" });
+      main.append(button, out);
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        out.innerHTML = "";
+        out.append(el("p", { class: "hint" }, "Claude wertet die gebündelten Daten aus …"));
+        try {
+          const data = await api("/api/ai/weekly-report", { method: "POST" });
+          out.innerHTML = "";
+          if (data.deltas.length) {
+            out.append(el("h2", {}, "Veränderungen"));
+            const grid = el("div", { class: "grid" });
+            for (const delta of data.deltas)
+              grid.append(el("div", { class: "card" },
+                el("div", { class: "label" }, delta.label),
+                el("div", { class: "value" }, `${fmtNum(delta.jetzt)} `,
+                  el("span", {
+                    class: "hint",
+                    style: `color:${delta.delta > 0 ? "var(--ok)" : "var(--crit)"}`,
+                  }, `(${delta.delta > 0 ? "+" : ""}${fmtNum(delta.delta)})`))));
+            out.append(grid);
+          }
+          out.append(el("h2", {}, "Bericht"));
+          out.append(el("div", { id: "ai-suggestions" }, data.report));
+        } catch (err) {
+          out.innerHTML = "";
+          out.append(el("p", { class: "error" }, err.message));
+        }
+        button.disabled = false;
       });
     },
   });

@@ -71,9 +71,16 @@ def parse(system_stable: str, system_context: str, user_message: str, output_for
         return None
 
 
-def complete(system: str, user_message: str, max_tokens: int | None = None) -> str:
-    """Eine einzelne Claude-Anfrage mit adaptivem Denken und Streaming.
+def complete(
+    system: str,
+    user_message: str,
+    max_tokens: int | None = None,
+    history: list[dict] | None = None,
+) -> str:
+    """Eine Claude-Anfrage mit adaptivem Denken und Streaming.
 
+    ``history`` (optional): vorherige Gesprächsrunden als
+    ``[{"role": "user"|"assistant", "content": str}, ...]``.
     Streaming schützt bei langen Antworten vor HTTP-Timeouts; das
     vollständige Ergebnis wird über ``get_final_message()`` eingesammelt.
     """
@@ -95,7 +102,7 @@ def complete(system: str, user_message: str, max_tokens: int | None = None) -> s
                     "cache_control": {"type": "ephemeral"},
                 }
             ],
-            messages=[{"role": "user", "content": user_message}],
+            messages=(history or []) + [{"role": "user", "content": user_message}],
         ) as stream:
             message = stream.get_final_message()
         return "".join(block.text for block in message.content if block.type == "text")
