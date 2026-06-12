@@ -115,6 +115,25 @@ class Notification(TenantMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class Widget(TenantMixin, Base):
+    """Dashboard-Kachel: Kennzahl, Liste oder Diagramm über eine Datenquelle."""
+
+    __tablename__ = "widgets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    widget_type: Mapped[str] = mapped_column(String(20))  # kennzahl | liste | diagramm
+    source: Mapped[str] = mapped_column(String(80))
+    metric: Mapped[str] = mapped_column(String(20), default="count")  # count | sum
+    metric_field: Mapped[str | None] = mapped_column(String(60))
+    group_by: Mapped[str | None] = mapped_column(String(60))
+    conditions: Mapped[list] = mapped_column(JsonColumn, default=list)
+    limit: Mapped[int] = mapped_column(default=10)
+    position: Mapped[int] = mapped_column(default=0)
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class WorkflowDefinition(TenantMixin, Base):
     """Mehrstufiger Genehmigungsprozess, gestartet durch ein Event."""
 

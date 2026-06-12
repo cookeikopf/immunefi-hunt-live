@@ -115,6 +115,48 @@ def archive_module(slug: str, db: Session = Depends(get_tenant_db)):
     db.commit()
 
 
+# ---- Widgets (Verwaltung: builder; Daten: Quellen-Berechtigung) ----
+
+from .models import Widget  # noqa: E402
+from .widgets import evaluate_widget, module_for_source  # noqa: E402
+
+
+@router.get("/widgets")
+def list_widgets(db: Session = Depends(get_tenant_db)):
+    return [
+        {"id": w.id, "title": w.title, "widget_type": w.widget_type,
+         "source": w.source, "active": w.active}
+        for w in db.query(Widget).order_by(Widget.position, Widget.id).all()
+    ]
+
+
+@router.delete("/widgets/{widget_id}", status_code=204)
+def delete_widget(widget_id: int, db: Session = Depends(get_tenant_db)):
+    widget = db.query(Widget).filter(Widget.id == widget_id).first()
+    if widget is None:
+        raise HTTPException(404, "Widget nicht gefunden")
+    db.delete(widget)
+    db.commit()
+
+
+@records_router.get("/widgets/data")
+def widget_data(
+    user: User = Depends(get_current_user), db: Session = Depends(get_tenant_db)
+):
+    """Ausgewertete Dashboard-Widgets — nur Quellen, die der Benutzer lesen darf."""
+    widgets = (
+        db.query(Widget)
+        .filter(Widget.active.is_(True))
+        .order_by(Widget.position, Widget.id)
+        .all()
+    )
+    return [
+        evaluate_widget(db, widget)
+        for widget in widgets
+        if has_permission(db, user, module_for_source(widget.source), "read")
+    ]
+
+
 # ---- Automationen verwalten (Recht: builder) ----
 
 from .models import Automation, AutomationRun  # noqa: E402

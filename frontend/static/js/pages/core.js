@@ -4,6 +4,38 @@ import { api } from "../api.js";
 import { el, fmtEur, fmtNum } from "../ui.js";
 import { registerPage } from "../app.js";
 
+function renderWidget(widget) {
+  if (widget.widget_type === "kennzahl") {
+    const value = widget.metric === "sum" ? fmtEur(widget.value) : fmtNum(widget.value);
+    return el("div", { class: "card" },
+      el("div", { class: "label" }, widget.title),
+      el("div", { class: `value ${widget.metric === "sum" ? "eur" : ""}` }, value));
+  }
+  if (widget.widget_type === "diagramm") {
+    const max = Math.max(1, ...widget.bars.map((b) => b.value));
+    return el("div", { class: "card", style: "grid-column: span 2" },
+      el("div", { class: "label" }, widget.title),
+      ...widget.bars.map((bar) => el("div", { style: "margin-top:8px" },
+        el("div", { class: "hint", style: "display:flex;justify-content:space-between" },
+          el("span", {}, bar.label), el("span", {}, fmtNum(bar.value))),
+        el("div", { style: "background:var(--accent-soft);border-radius:4px;height:10px" },
+          el("div", {
+            style: `background:var(--accent);height:10px;border-radius:4px;width:${(bar.value / max) * 100}%`,
+          })))));
+  }
+  // liste
+  const keys = widget.rows.length
+    ? Object.keys(widget.rows[0]).filter((k) => !["id", "created_at", "updated_at"].includes(k)).slice(0, 3)
+    : [];
+  return el("div", { class: "card", style: "grid-column: span 2" },
+    el("div", { class: "label" }, widget.title),
+    widget.rows.length
+      ? el("table", { style: "margin-top:8px;border:none" },
+          el("tr", {}, keys.map((k) => el("th", {}, k))),
+          widget.rows.map((row) => el("tr", {}, keys.map((k) => el("td", {}, String(row[k] ?? "—"))))))
+      : el("p", { class: "hint" }, "Keine Treffer."));
+}
+
 export function registerCorePages() {
   registerPage("dashboard", {
     title: "Dashboard", nav: true, module: "ai",
@@ -30,8 +62,18 @@ export function registerCorePages() {
           el("div", { class: "label" }, label),
           el("div", { class: `value ${cls || ""}` }, String(value))));
 
-      // Einhängepunkt für Builder-Widgets (Etappe 7)
-      main.append(el("div", { id: "custom-widgets" }));
+      // Eigene Widgets aus dem Builder
+      const widgetWrap = el("div");
+      main.append(widgetWrap);
+      try {
+        const widgets = await api("/api/custom/widgets/data");
+        if (widgets.length) {
+          widgetWrap.append(el("h2", {}, "Ihre Widgets"));
+          const widgetGrid = el("div", { class: "grid" });
+          widgetWrap.append(widgetGrid);
+          for (const widget of widgets) widgetGrid.append(renderWidget(widget));
+        }
+      } catch { /* keine Berechtigung o. ä. */ }
     },
   });
 
