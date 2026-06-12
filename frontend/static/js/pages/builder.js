@@ -242,6 +242,46 @@ async function aiBuilderSection(container) {
   await refreshDrafts();
 }
 
+async function automationsTab(container) {
+  const automations = await api("/api/builder/automations");
+  container.append(el("h2", {}, "Automationen"));
+  if (!automations.length) {
+    container.append(el("p", { class: "hint" },
+      "Noch keine Automationen — beschreiben Sie oben z. B.: ",
+      '„Wenn eine Rechnung über 5.000 € erstellt wird, lege eine Prüf-Aufgabe an."'));
+    return;
+  }
+  container.append(renderTable({
+    columns: [
+      { key: "name", label: "Name" },
+      { key: "trigger_type", label: "Auslöser",
+        render: (a) => a.trigger_type === "event" ? `Event: ${a.trigger_event}` : `Zeitplan: ${a.schedule}` },
+      { key: "actions", label: "Aktionen", render: (a) => String(a.actions.length) },
+      { key: "active", label: "Status",
+        render: (a) => el("span", { class: `pill ${a.active ? "ok" : "crit"}` }, a.active ? "aktiv" : "pausiert") },
+    ],
+    actions: [
+      {
+        label: "An/Aus",
+        onClick: async (a) => {
+          await api(`/api/builder/automations/${a.id}?active=${!a.active}`, { method: "PATCH" });
+          container.innerHTML = ""; await automationsTab(container);
+        },
+      },
+      {
+        label: "Protokoll",
+        onClick: async (a) => {
+          const runs = await api(`/api/builder/automations/${a.id}/runs`);
+          alert(runs.length
+            ? runs.slice(0, 10).map((r) => `${new Date(r.created_at).toLocaleString("de-DE")} [${r.status}] ${r.detail}`).join("\n")
+            : "Noch keine Ausführungen.");
+        },
+      },
+    ],
+    rows: automations,
+  }));
+}
+
 export function registerBuilderPages() {
   registerPage("builder", {
     title: "Builder", nav: true, module: "builder",
@@ -249,10 +289,42 @@ export function registerBuilderPages() {
       main.append(el("h2", {}, "Builder ",
         el("span", { class: "hint" }, "— passen Sie das KMU-OS an Ihr Unternehmen an")));
       const aiContainer = el("div");
+      const automationContainer = el("div");
       const container = el("div");
-      main.append(aiContainer, container);
+      main.append(aiContainer, automationContainer, container);
       await aiBuilderSection(aiContainer);
+      await automationsTab(automationContainer);
       await modulesTab(container);
+    },
+  });
+
+  registerPage("notifications", {
+    title: "Mitteilungen", nav: true,
+    async render(main) {
+      main.append(el("h2", {}, "Mitteilungen"));
+      const list = el("div", {}, el("p", { class: "hint" }, "Lade …"));
+      main.append(list);
+      const notes = await api("/api/notifications");
+      list.innerHTML = "";
+      if (!notes.length) {
+        list.append(el("p", { class: "hint" }, "Keine Mitteilungen."));
+        return;
+      }
+      for (const note of notes) {
+        const row = el("div", { class: `finding ${note.read ? "" : "warnung"}` },
+          el("span", { class: "area" },
+            `${note.source || "System"} · ${new Date(note.created_at).toLocaleString("de-DE")}`),
+          el("br"), note.message, " ",
+          note.read ? "" : el("button", {
+            class: "ghost small", style: "margin-left:8px",
+            onclick: async (event) => {
+              await api(`/api/notifications/${note.id}/read`, { method: "POST" });
+              event.target.closest(".finding").classList.remove("warnung");
+              event.target.remove();
+            },
+          }, "Gelesen"));
+        list.append(row);
+      }
     },
   });
 }

@@ -69,6 +69,52 @@ class CustomRecord(TenantMixin, Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
 
+class Automation(TenantMixin, Base):
+    """Wenn-Dann-Regel: Event- oder zeitgesteuert, Aktionen als JSON."""
+
+    __tablename__ = "automations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    trigger_type: Mapped[str] = mapped_column(String(20))   # event | schedule
+    trigger_event: Mapped[str | None] = mapped_column(String(120), index=True)
+    schedule: Mapped[str | None] = mapped_column(String(40))  # daily@HH:MM | every:<n>m
+    source: Mapped[str | None] = mapped_column(String(80))    # Datenquelle für schedule-Prüfungen
+    conditions: Mapped[list] = mapped_column(JsonColumn, default=list)
+    actions: Mapped[list] = mapped_column(JsonColumn, default=list)
+    active: Mapped[bool] = mapped_column(default=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AutomationRun(TenantMixin, Base):
+    """Audit-Protokoll: jede Ausführung einer Automation."""
+
+    __tablename__ = "automation_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    automation_id: Mapped[int] = mapped_column(ForeignKey("automations.id"), index=True)
+    trigger_info: Mapped[str | None] = mapped_column(String(300))
+    target_ref: Mapped[str | None] = mapped_column(String(120), index=True)  # Dedup für schedule-Treffer
+    status: Mapped[str] = mapped_column(String(20), default="ok")  # ok | fehler
+    detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Notification(TenantMixin, Base):
+    """Interne Mitteilung an einen Benutzer oder eine Rolle."""
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("auth_users.id"), index=True)
+    role_name: Mapped[str | None] = mapped_column(String(80), index=True)
+    message: Mapped[str] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(String(120))  # z. B. "Automation: TÜV-Prüfung"
+    read: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class BuilderDraft(TenantMixin, Base):
     """Ein Builder-Entwurf: deutsche Beschreibung → validierte Definition →
     Vorschau → Aktivierung. Trägt den Bestätigen-Flow (Etappe 4)."""

@@ -109,6 +109,13 @@ class AutomationDef(BaseModel):
         default=None,
         description="Für trigger_type=schedule: 'daily@HH:MM' oder 'every:<n>m'",
     )
+    source: str | None = Field(
+        default=None,
+        description="Nur für trigger_type=schedule: Datenquelle, deren Einträge "
+                    "geprüft werden (z. B. 'custom:fuhrpark', 'finance.invoices', "
+                    "'projects.tasks'). Bedingungen werden je Eintrag ausgewertet, "
+                    "Aktionen je Treffer einmalig ausgeführt.",
+    )
     conditions: list[ConditionDef] = Field(default_factory=list)
     actions: list[ActionDef] = Field(min_length=1, max_length=5)
 

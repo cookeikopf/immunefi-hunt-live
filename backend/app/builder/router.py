@@ -115,6 +115,53 @@ def archive_module(slug: str, db: Session = Depends(get_tenant_db)):
     db.commit()
 
 
+# ---- Automationen verwalten (Recht: builder) ----
+
+from .models import Automation, AutomationRun  # noqa: E402
+
+
+def _automation_out(automation: Automation) -> dict:
+    return {
+        "id": automation.id, "name": automation.name, "active": automation.active,
+        "trigger_type": automation.trigger_type, "trigger_event": automation.trigger_event,
+        "schedule": automation.schedule, "source": automation.source,
+        "conditions": automation.conditions, "actions": automation.actions,
+        "next_run_at": automation.next_run_at,
+    }
+
+
+@router.get("/automations")
+def list_automations(db: Session = Depends(get_tenant_db)):
+    return [_automation_out(a) for a in
+            db.query(Automation).order_by(Automation.created_at.desc()).all()]
+
+
+@router.patch("/automations/{automation_id}")
+def toggle_automation(automation_id: int, active: bool, db: Session = Depends(get_tenant_db)):
+    automation = db.query(Automation).filter(Automation.id == automation_id).first()
+    if automation is None:
+        raise HTTPException(404, "Automation nicht gefunden")
+    automation.active = active
+    db.commit()
+    return _automation_out(automation)
+
+
+@router.get("/automations/{automation_id}/runs")
+def automation_runs(automation_id: int, db: Session = Depends(get_tenant_db)):
+    runs = (
+        db.query(AutomationRun)
+        .filter(AutomationRun.automation_id == automation_id)
+        .order_by(AutomationRun.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return [
+        {"id": r.id, "status": r.status, "detail": r.detail,
+         "trigger_info": r.trigger_info, "created_at": r.created_at}
+        for r in runs
+    ]
+
+
 # ---- KI-Builder: Entwurf → Vorschau → Aktivieren (Recht: builder) ----
 
 from pydantic import BaseModel  # noqa: E402
