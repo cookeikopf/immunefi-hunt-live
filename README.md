@@ -1,123 +1,109 @@
-# KMU-OS — Operating System für kleine und mittlere Unternehmen
+# KMU-OS — das Operating System für kleine und mittlere Unternehmen
 
-Ein integriertes Betriebssystem für deutsche KMUs: **CRM, Finanzen, Personal,
-Projekte und Wissensmanagement** in einem System. Weil alle Daten an einem Ort
-gebündelt sind, kann eine KI das Unternehmen ganzheitlich analysieren — und
-über ein eingebautes **RAG-System** entsteht ein firmeneigener KI-Assistent,
-der Prozeduren, Regeln und alle Geschäftsdaten des Unternehmens kennt.
+**Ein System statt zehn Insellösungen:** CRM, Finanzen, Personal, Projekte und
+Wissensmanagement in einer Oberfläche — mit allen Daten an einem Ort. Genau
+diese Bündelung macht den Unterschied: Eine KI sieht das *gesamte* Unternehmen,
+beantwortet Fragen zu Prozessen und Zahlen, erkennt Risiken und schlägt
+konkrete Verbesserungen vor. Und mit dem **Builder** passt jede Firma das
+System in normalem Deutsch an sich selbst an — ohne Programmierung.
 
-## Kernidee
+## Was KMU-OS kann
 
-```
-┌─────────────────────────── KMU-OS ───────────────────────────┐
-│                                                              │
-│  CRM        Finanzen     Personal     Projekte     Wissen    │
-│  Kunden     Rechnungen   Mitarbeiter  Aufgaben     SOPs      │
-│  Kontakte   Ausgaben     Abwesenheit  Deadlines    Regeln    │
-│     │           │            │           │           │       │
-│     └───────────┴─────┬──────┴───────────┴───────────┘       │
-│                       ▼                                      │
-│                  DATENHUB  (eine Datenbank, ein Event-Bus)   │
-│                  ┌────┴─────┐                                │
-│                  ▼          ▼                                │
-│            KPI-Engine   RAG-Index (Chunks + Embeddings)      │
-│                  │          │                                │
-│                  ▼          ▼                                │
-│            KI-Insights   Firmen-Assistent (Claude)           │
-│            "Was sollten  "Wie läuft unser Onboarding?"       │
-│             wir besser    "Welche Rechnungen sind            │
-│             machen?"       überfällig?"                      │
-└──────────────────────────────────────────────────────────────┘
-```
+| Bereich | Funktionen |
+|---|---|
+| **Geschäftsmodule** | Kunden & Kontakthistorie, Rechnungen (USt., Fälligkeit) & Ausgaben, Mitarbeitende & Abwesenheiten, Projekte & Aufgaben, SOPs/Regeln/Dokumente (versioniert) |
+| **Firmen-Assistent** | RAG-Chat über das gesamte Unternehmen: Prozesse, Regeln, Kunden, Projekte, Zahlen — mit Quellenangaben und fortsetzbaren Unterhaltungen |
+| **KI-Insights** | Regelbasierte Befunde (überfällige Rechnungen, Liquidität, überfällige Aufgaben …) + priorisierte Verbesserungsvorschläge von Claude |
+| **Wochenbericht** | Lage, Entwicklung (Deltas zur Vorwoche) und Prioritäten — auf Knopfdruck oder automatisiert |
+| **Builder** | Eigene Module ("Fuhrpark mit Kennzeichen und TÜV-Termin"), Wenn-Dann-Automationen, Dashboard-Widgets und mehrstufige Genehmigungs-Workflows — **per Beschreibung in normalem Deutsch**, mit Vorschau & Bestätigung; ohne KI-Schlüssel über den Form-Editor |
+| **Team & Rechte** | Benutzerverwaltung, Rollen mit Rechten pro Modul (lesen/schreiben), inkl. eigener Module |
+| **Einrichtung** | Setup-Wizard in einer Minute, CSV-Import für Bestandsdaten, optionale Demo-Firma |
+| **Betrieb** | Self-Hosted (Docker, eine Firma) und SaaS (mandantenfähig, Registrierung zuschaltbar) aus einer Codebasis |
 
-1. **Module steuern das Tagesgeschäft** — jede Kundenanlage, Rechnung,
-   Aufgabe und SOP landet in einer gemeinsamen Datenbank.
-2. **Der Datenhub bündelt alles** — Kennzahlen über alle Bereiche hinweg,
-   plus ein Event-Bus, der Änderungen sofort an die KI-Schicht meldet.
-3. **Das RAG-System macht das Wissen abfragbar** — Dokumente, SOPs, Regeln
-   und Geschäftsdaten werden automatisch in durchsuchbare Chunks zerlegt und
-   eingebettet. Der Firmen-Assistent beantwortet Fragen ausschließlich auf
-   Basis der echten Unternehmensdaten („firmeneigenes LLM").
-4. **Die Insights-Engine schlägt Verbesserungen vor** — regelbasierte Befunde
-   (überfällige Rechnungen, Liquidität, überfällige Aufgaben …) plus
-   priorisierte KI-Vorschläge von Claude auf Basis der gebündelten Zahlen.
-
-## Schnellstart
+## In 5 Minuten startklar (Docker)
 
 ```bash
-# 1. Abhängigkeiten installieren
+cp .env.example .env
+# KMUOS_SECRET_KEY setzen (z. B. python -c "import secrets; print(secrets.token_urlsafe(48))")
+# optional: ANTHROPIC_API_KEY für die KI-Funktionen
+
+docker compose up -d
+```
+
+→ **http://localhost:8000** öffnen, Setup-Wizard ausfüllen, fertig.
+Mit „Demo-Daten" startet eine komplette Musterfirma inkl. Builder-Beispielen
+(Fuhrpark-Modul, TÜV-Automation, Widgets, Urlaubsfreigabe-Workflow).
+
+Mit PostgreSQL statt SQLite: `docker compose --profile postgres up -d`
+(Verbindungs-URL in `.env`, siehe Kommentare).
+
+> **Wichtig:** Genau **1 Worker** betreiben (Standard im Container) —
+> Event-Bus und Automations-Scheduler laufen in-process.
+
+### Lokale Entwicklung
+
+```bash
 pip install -r requirements.txt
-
-# 2. (Optional) API-Schlüssel für die KI-Funktionen hinterlegen
-cp .env.example .env        # ANTHROPIC_API_KEY eintragen
-
-# 3. Demo-Daten einer Musterfirma einspielen (inkl. RAG-Index)
-python -m backend.seed_demo
-
-# 4. Starten
+alembic upgrade head
+python -m backend.seed_demo          # Demo-Firma: admin@demo.de / demo1234
 uvicorn backend.app.main:app --reload
+python -m pytest backend/tests       # 41 Tests
 ```
 
-Danach:
+## Der Builder — das OS personalisiert sich selbst
 
-- **Dashboard:** http://localhost:8000 — Kennzahlen, Firmen-Assistent, KI-Insights
-- **API-Dokumentation (OpenAPI):** http://localhost:8000/docs
+Im Builder beschreibt der Nutzer auf Deutsch, was er braucht:
 
-> Ohne `ANTHROPIC_API_KEY` laufen alle Module, das Dashboard und die
-> RAG-Suche vollständig — nur die LLM-Antworten werden durch einen
-> Hinweis ersetzt.
+> *„Ich möchte unseren Fuhrpark verwalten — Kennzeichen, Marke, TÜV-Termin und
+> Status. Wenn ein TÜV-Termin überschritten ist, soll automatisch eine Aufgabe
+> entstehen. Und ich will eine Dashboard-Kachel mit den Fahrzeugen in der
+> Werkstatt."*
 
-## Module & API
+Claude übersetzt das (Structured Outputs, garantiert schema-konform) in:
 
-| Modul | Endpunkte | Inhalt |
-|---|---|---|
-| CRM | `/api/crm/customers`, `…/interactions` | Kunden, Status (Lead/aktiv), Kontakthistorie |
-| Finanzen | `/api/finance/invoices`, `/api/finance/expenses` | Rechnungen mit USt. & Fälligkeit, Ausgaben |
-| Personal | `/api/hr/employees`, `…/absences` | Mitarbeitende, Urlaub & Krankheit |
-| Projekte | `/api/projects`, `…/tasks` | Projekte mit Budget/Deadline, Aufgaben |
-| Wissen | `/api/knowledge/documents` | SOPs, Regeln, Dokumente (versioniert) |
-| KI | `/api/ai/chat`, `/search`, `/insights`, `/kpis`, `/reindex`, `/status` | Assistent, RAG-Suche, Vorschläge |
+1. ein **Modul** mit Feldern (Text, Zahl, Datum, Auswahl, Verweis auf Kunden/Mitarbeiter/Projekte),
+2. eine **Automation** (Event- oder zeitgesteuert, Bedingungen, Aktionen: Aufgabe/Notiz/Custom-Eintrag anlegen, Datensatz ändern, Rolle benachrichtigen),
+3. ein **Widget** (Kennzahl, Liste, Diagramm),
+4. bei Bedarf einen **Workflow** (mehrstufige Genehmigung mit Rollen je Stufe).
 
-## Die KI-Schicht im Detail
+Der Nutzer sieht eine **editierbare Vorschau** und aktiviert erst dann.
+Alles ist metadaten-getrieben — kein generierter Code. Neue Module erscheinen
+sofort in Navigation, Rechte-Matrix, RAG-Index, KPIs und als Widget-Quelle.
 
-**Datenhub** (`backend/app/ai/datahub.py`) — berechnet bereichsübergreifende
-KPIs und einen Unternehmens-Schnappschuss als Text, der jedem KI-Prompt
-beiliegt.
+## Architektur in Kürze
 
-**RAG-Pipeline** (`backend/app/ai/rag/`)
-- *Chunking:* Dokumente werden an Absatz-/Satzgrenzen in überlappende
-  Abschnitte zerlegt.
-- *Embeddings:* Standardmäßig ein deterministischer Hashing-Embedder
-  (offline, ohne externe Modelle). Die Schnittstelle ist pluggable — ein
-  semantisches Embedding-Modell kann später eingesteckt werden, ohne den
-  Rest zu ändern.
-- *Hybrid-Retrieval:* Vektor-Ähnlichkeit + BM25-Keyword-Score, damit sowohl
-  semantische Nähe als auch exakte Begriffe (Rechnungsnummern, Namen) treffen.
-- *Indexer:* hört auf den Event-Bus — jede Änderung an Dokumenten, Kunden,
-  Projekten oder Mitarbeitenden aktualisiert den Index sofort. Voll-Reindex
-  über `POST /api/ai/reindex`.
-
-**Firmen-Assistent** (`backend/app/ai/assistant.py`) — holt zu jeder Frage die
-relevantesten Chunks, baut den Kontext (Schnappschuss + Quellen) und fragt
-Claude (`claude-opus-4-8`, adaptives Denken, Streaming, Prompt-Caching für
-den Firmenkontext). Antworten nennen ihre Quellen.
-
-**Insights-Engine** (`backend/app/ai/insights.py`) — regelbasierte Befunde
-laufen immer; Claude formuliert daraus priorisierte, konkrete
-Verbesserungsvorschläge mit erstem Schritt.
-
-## Tests
-
-```bash
-python -m pytest backend/tests
+```
+Module (CRM, Finanzen, HR, Projekte, Wissen, Custom) ─┐
+                                                      ├─► eine Datenbank + Event-Bus
+Builder (Module, Automationen, Widgets, Workflows) ───┘          │
+                          ┌──────────────┬───────────────────────┤
+                          ▼              ▼                       ▼
+                     KPI-Engine     RAG-Index        Automationen & Workflows
+                          │              │
+                          ▼              ▼
+                   Insights/Bericht   Firmen-Assistent (Claude)
 ```
 
-14 Tests decken die Geschäftsmodule, die RAG-Pipeline (Chunking, Embeddings,
-Event-getriebene Indexierung, Suche), den KPI-Datenhub, die Insights-Regeln
-und den Chat-Fallback ohne API-Schlüssel ab.
+- **Mandantenfähig:** tenant_id auf allen Tabellen, zentral durchgesetzt über
+  SQLAlchemy-Session-Events — keine Query muss manuell filtern.
+- **Feingranulare Rechte:** Rollen × Module × lesen/schreiben, inkl. `custom:<slug>`.
+- **KI mit Substanz:** Hybrid-Retrieval (Vektor + BM25), Event-getriebene
+  Indexierung, Prompt-Caching, adaptives Denken, Multi-Turn-Verlauf.
+- **Graceful Degradation:** ohne `ANTHROPIC_API_KEY` laufen alle Module,
+  Suche, Automationen, Workflows und Widgets vollständig weiter.
 
-## Architektur & Ausbaustufen
+Details, Entscheidungen und Stolperfallen: [`docs/architecture.md`](docs/architecture.md)
 
-Details in [`docs/architecture.md`](docs/architecture.md) — u. a. wie ein
-semantisches Embedding-Modell, Authentifizierung/Mandantenfähigkeit und
-weitere Module (Einkauf, Lager, DATEV-Export) ergänzt werden können.
+## API
+
+Vollständige OpenAPI-Dokumentation unter **/docs** (nach Login `Authorize`
+mit dem Token aus `/api/auth/login`). Wichtigste Gruppen: `/api/auth`,
+`/api/admin`, `/api/{crm,finance,hr,projects,knowledge}`, `/api/builder`,
+`/api/custom/<slug>/records`, `/api/workflows`, `/api/ai`, `/api/imports`.
+
+## Datenschutz (DSGVO)
+
+Alle Geschäftsdaten bleiben in der eigenen Datenbank. An die Claude API gehen
+nur die für die jeweilige Anfrage nötigen Kontextauszüge. Für den
+Produktivbetrieb: AVV mit dem KI-Anbieter abschließen, Datenschutzerklärung
+ergänzen, personenbezogene Daten in SOPs sparsam halten.

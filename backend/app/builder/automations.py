@@ -265,10 +265,13 @@ def _action_notify(db: Session, action: dict, context: dict, tenant_id: int, sou
 
 def execute_actions(db: Session, automation: Automation, context: dict,
                     tenant_id: int, target_ref: str | None = None) -> None:
+    # Name/ID vor möglichen Flush-Fehlern sichern (Instanz kann expiren)
+    automation_id, automation_name = automation.id, automation.name
+    actions = list(automation.actions)
     details = []
     status = "ok"
     try:
-        for action in automation.actions:
+        for action in actions:
             action_type = action.get("action_type")
             if action_type == "create_record":
                 details.append(_action_create_record(db, action, context, tenant_id))
@@ -276,16 +279,17 @@ def execute_actions(db: Session, automation: Automation, context: dict,
                 details.append(_action_update_record(db, action, context, tenant_id))
             elif action_type == "notify":
                 details.append(_action_notify(db, action, context, tenant_id,
-                                              f"Automation: {automation.name}"))
+                                              f"Automation: {automation_name}"))
             else:
                 raise ValueError(f"Unbekannte Aktion: {action_type}")
     except Exception as exc:
+        db.rollback()  # Session nach Flush-Fehlern wieder benutzbar machen
         status = "fehler"
         details.append(str(exc))
-        logger.exception("Automation '%s' fehlgeschlagen", automation.name)
+        logger.exception("Automation '%s' fehlgeschlagen", automation_name)
     db.add(AutomationRun(
         tenant_id=tenant_id,
-        automation_id=automation.id,
+        automation_id=automation_id,
         trigger_info=context.get("_trigger"),
         target_ref=target_ref,
         status=status,
@@ -400,6 +404,7 @@ def run_scheduled(now: datetime | None = None) -> int:
     ohne auf den asyncio-Tick zu warten.
     """
     now = now or datetime.now(timezone.utc)
+    _load_event_models()  # alle Mapper laden (wichtig bei Standalone-Aufrufen)
     executed = 0
     db = SessionLocal()  # bewusst ungescoped: über alle Mandanten iterieren
     try:

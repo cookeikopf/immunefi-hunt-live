@@ -106,3 +106,62 @@ schützt lange Antworten vor HTTP-Timeouts.
   KI-Anbieter abschließen und in der Datenschutzerklärung aufführen.
 - Personenbezogene Daten in SOPs/Notizen sparsam halten — sie landen im
   RAG-Index und damit potenziell im KI-Kontext.
+
+---
+
+## v1.0-Ergänzungen (verkaufsfertige Version)
+
+### Mandantenfähigkeit
+`core/tenancy.py`: `TenantMixin` auf allen Geschäftstabellen; zwei
+SQLAlchemy-Session-Events erzwingen das Scoping zentral —
+`do_orm_execute` hängt `with_loader_criteria(tenant_id == session.info["tenant_id"])`
+an jeden SELECT/UPDATE/DELETE, `before_flush` setzt `tenant_id` automatisch
+und verweigert das Anlegen ohne Mandanten-Bindung. Ungescopte Sessions gibt
+es nur in Auth/Bootstrap. `tenant_get()` ersetzt `Session.get()`
+(Identity-Map-Bypass). Self-Hosted: erster Setup legt den einzigen Mandanten
+an; SaaS: `KMUOS_ALLOW_SIGNUP=true` schaltet die Registrierung frei.
+
+### Auth & Rechte
+`modules/auth/`: bcrypt + PyJWT (HS256, `KMUOS_SECRET_KEY`). Rollen mit
+Berechtigungen pro Modul und Aktion (write ⊃ read, `*` = alles, dynamisch
+`custom:<slug>`); Durchsetzung als Router-Dependency `require_module(...)`
+(HTTP-Methode → Aktion). Vordefinierte Rollen je Mandant: Admin,
+Geschäftsführung, Buchhaltung, Mitarbeiter.
+
+### Builder (backend/app/builder/)
+- `definitions.py`: Pydantic-Schemas aller Artefakte — gemeinsame Sprache von
+  Form-Editor, KI-Übersetzer (Structured Outputs: keine Rekursion, flache
+  UND-Bedingungen) und Engines.
+- `translator.py` + `llm.parse()`: Claude erhält den Mandanten-Katalog
+  (Module/Felder/Events/Rollen, hinter dem Cache-Breakpoint) und liefert
+  `BuilderResult` schema-garantiert; Entwürfe (`builder_drafts`) tragen den
+  Vorschau→Bestätigen-Flow, `activation.materialize()` materialisiert.
+- `records.py`: generische CRUD-Engine; Validierung über
+  `pydantic.create_model` (struktureller Cache), Werte als JSON
+  (JSONB-Variante auf Postgres), Filterung in Python (SQLite/Postgres-neutral).
+- `automations.py`: Event-Dispatcher (lädt auslösendes Objekt, prüft
+  Bedingungen, Rekursionsschutz Tiefe 3) + zeitgesteuerte Prüfungen über
+  Datenquellen mit Dedup (`automation_runs.target_ref`); Aktionen
+  create_record/update_record/notify mit `{{event.*}}/{{record.*}}/{{today}}`.
+- `scheduler.py`: asyncio-Task, 60-s-Tick, `KMUOS_SCHEDULER_ENABLED`.
+- `workflows.py`: Statusmaschine offen → Stufe n → genehmigt/abgelehnt,
+  Rollen-Check je Stufe, Mitteilungen an die nächste Stufe, Abschluss-Event
+  `workflow.instance.completed` (mit Automationen verkettbar).
+- `widgets.py`: kennzahl/liste/diagramm über dieselben Quellen und dieselbe
+  Filtersprache wie Automationen; Datenendpunkt filtert nach
+  Lese-Berechtigung der Quelle.
+
+### Betrieb
+Dockerfile (non-root, Healthcheck, `alembic upgrade head` beim Start,
+**genau 1 Uvicorn-Worker** — Event-Bus und Scheduler sind in-process),
+docker-compose mit SQLite-Volume und optionalem Postgres-Profil.
+Beim Scale-out: Scheduler nur auf einer Instanz aktiv lassen und den
+Event-Bus gegen eine Queue (z. B. Redis) tauschen — die `events`-API
+bleibt dabei stabil.
+
+### Bekannte Grenzen v1.0
+- Record-Filter der Widgets/Automationen laufen in Python — ab ~50k
+  Custom-Records pro Mandant auf Postgres-JSON-Queries umstellen.
+- Billing ist nur als Stub vorbereitet (`tenants.stripe_customer_id`).
+- E-Mail-Versand (Mitteilungen, Wochenbericht) bewusst noch nicht enthalten —
+  Anbindung über eine notify-Action-Erweiterung vorgesehen.

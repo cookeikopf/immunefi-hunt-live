@@ -150,7 +150,90 @@ def seed_demo_data(db: Session) -> dict[str, int]:
         db.add(KnowledgeDocument(title=title, doc_type=doc_type, category=category, content=content))
 
     db.commit()
+    _seed_builder_examples(db, today)
 
     from .ai.rag.indexer import reindex_all
 
     return reindex_all(db)
+
+
+def _seed_builder_examples(db: Session, today: date) -> None:
+    """Builder-Beispiele: Custom-Modul, Automation, Widget, Workflow —
+    damit die Demo den vollen Funktionsumfang zeigt."""
+    from .builder.automations import create_automation
+    from .builder.definitions import (
+        AutomationDef,
+        FieldDef,
+        ModuleDef,
+        WidgetDef,
+        WorkflowDef,
+        WorkflowStepDef,
+    )
+    from .builder.models import CustomRecord
+    from .builder.records import create_module_from_def, grant_default_permissions
+    from .builder.widgets import create_widget
+    from .builder.workflows import create_workflow
+
+    # 1. Custom-Modul "Fuhrpark" (so, wie es der KI-Builder erzeugen würde)
+    module = create_module_from_def(db, ModuleDef(
+        slug="fuhrpark", name="Fahrzeug", name_plural="Fuhrpark",
+        description="Firmenfahrzeuge mit TÜV-Terminen — per Builder erstellt.",
+        fields=[
+            FieldDef(name="kennzeichen", label="Kennzeichen", field_type="text", required=True),
+            FieldDef(name="marke", label="Marke", field_type="text"),
+            FieldDef(name="tuev_datum", label="TÜV-Termin", field_type="date"),
+            FieldDef(name="status", label="Status", field_type="select",
+                     options=["verfügbar", "unterwegs", "werkstatt"]),
+        ],
+    ))
+    grant_default_permissions(db, module.slug)
+    db.add_all([
+        CustomRecord(module_id=module.id, values={
+            "kennzeichen": "S-KM 1234", "marke": "VW Crafter",
+            "tuev_datum": (today - timedelta(days=10)).isoformat(),  # überfällig → Automation greift
+            "status": "verfügbar",
+        }),
+        CustomRecord(module_id=module.id, values={
+            "kennzeichen": "S-KM 5678", "marke": "Mercedes Sprinter",
+            "tuev_datum": (today + timedelta(days=90)).isoformat(),
+            "status": "werkstatt",
+        }),
+    ])
+    db.commit()
+
+    # 2. Automation: täglich TÜV prüfen → Aufgabe je überfälligem Fahrzeug
+    create_automation(db, AutomationDef(
+        name="TÜV-Termine überwachen",
+        trigger_type="schedule", schedule="daily@06:00", source="custom:fuhrpark",
+        conditions=[{"field": "tuev_datum", "op": "lt", "value": "{{today}}"}],
+        actions=[{"action_type": "create_record", "target": "projects.task",
+                  "values": {"title": "TÜV fällig: {{record.kennzeichen}} ({{record.marke}})"}}],
+    ))
+    # 3. Automation: große Rechnungen melden
+    create_automation(db, AutomationDef(
+        name="Großrechnungen melden",
+        trigger_type="event", trigger_event="finance.invoice.created",
+        conditions=[{"field": "amount_net", "op": "gt", "value": 10000}],
+        actions=[{"action_type": "notify", "notify_role": "Geschäftsführung",
+                  "message": "Rechnung {{record.number}} über {{record.amount_net}} EUR wurde erstellt."}],
+    ))
+
+    # 4. Dashboard-Widgets
+    create_widget(db, WidgetDef(
+        title="Offene Forderungen (netto)", widget_type="kennzahl",
+        source="finance.invoices", metric="sum", metric_field="amount_net",
+        conditions=[{"field": "status", "op": "eq", "value": "offen"}],
+    ))
+    create_widget(db, WidgetDef(
+        title="Fuhrpark nach Status", widget_type="diagramm",
+        source="custom:fuhrpark", group_by="status",
+    ))
+
+    # 5. Workflow: Urlaubsfreigabe
+    create_workflow(db, WorkflowDef(
+        name="Urlaubsfreigabe",
+        description="Abwesenheiten werden von der Geschäftsführung freigegeben.",
+        trigger_event="hr.absence.created",
+        steps=[WorkflowStepDef(name="Freigabe Geschäftsführung",
+                               approver_role="Geschäftsführung")],
+    ))

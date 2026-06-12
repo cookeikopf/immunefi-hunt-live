@@ -5,6 +5,7 @@ os.environ["KMUOS_DATABASE_URL"] = "sqlite:///./test_kmuos.db"
 os.environ["KMUOS_SECRET_KEY"] = "test-secret-mit-mindestens-32-zeichen-laenge"
 os.environ["KMUOS_ALLOW_SIGNUP"] = "true"   # für Mandanten-Isolations-Tests
 os.environ["KMUOS_SCHEDULER_ENABLED"] = "false"
+os.environ.pop("ANTHROPIC_API_KEY", None)  # Tests laufen immer ohne echte KI
 
 import pytest
 from fastapi.testclient import TestClient
