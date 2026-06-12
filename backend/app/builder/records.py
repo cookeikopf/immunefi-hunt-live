@@ -20,11 +20,16 @@ _TYPE_MAP: dict[str, type] = {
     "number": float, "date": date, "bool": bool, "reference": int,
 }
 
-_model_cache: dict[tuple[int, int], type[BaseModel]] = {}
+_model_cache: dict[tuple, type[BaseModel]] = {}
 
 
 def record_model(module: CustomModule) -> type[BaseModel]:
-    cache_key = (module.id, module.version)
+    # Struktureller Cache-Schlüssel: identische Definition → gleiches Modell.
+    # (IDs allein reichen nicht — z. B. nach DB-Resets in Tests.)
+    cache_key = (
+        module.slug, module.version,
+        tuple((f.name, f.field_type, f.required) for f in module.fields),
+    )
     if cache_key not in _model_cache:
         field_specs: dict[str, Any] = {}
         for field in module.fields:

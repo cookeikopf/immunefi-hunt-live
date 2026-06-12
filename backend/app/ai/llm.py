@@ -33,6 +33,44 @@ _NO_KEY_MESSAGE = (
 )
 
 
+def parse(system_stable: str, system_context: str, user_message: str, output_format):
+    """Structured-Outputs-Anfrage: Claude antwortet garantiert im Schema.
+
+    ``system_stable`` ist der über Anfragen hinweg identische Teil
+    (mit Cache-Breakpoint), ``system_context`` der mandanten-spezifische
+    Teil dahinter. Liefert die validierte Pydantic-Instanz oder None
+    (kein API-Key / Fehler) — der Aufrufer fällt dann auf den manuellen
+    Editor zurück.
+    """
+    if not is_available():
+        return None
+
+    client = anthropic.Anthropic()
+    try:
+        response = client.messages.parse(
+            model=settings.anthropic_model,
+            max_tokens=settings.ai_max_tokens,
+            thinking={"type": "adaptive"},
+            system=[
+                {
+                    "type": "text",
+                    "text": system_stable,
+                    "cache_control": {"type": "ephemeral"},
+                },
+                {"type": "text", "text": system_context},
+            ],
+            messages=[{"role": "user", "content": user_message}],
+            output_format=output_format,
+        )
+        return response.parsed_output
+    except anthropic.APIStatusError as exc:
+        logger.error("Claude-Parse-Fehler (%s): %s", exc.status_code, exc.message)
+        return None
+    except anthropic.APIConnectionError:
+        logger.error("Keine Verbindung zur Claude API (parse)")
+        return None
+
+
 def complete(system: str, user_message: str, max_tokens: int | None = None) -> str:
     """Eine einzelne Claude-Anfrage mit adaptivem Denken und Streaming.
 

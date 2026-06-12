@@ -115,6 +115,121 @@ def archive_module(slug: str, db: Session = Depends(get_tenant_db)):
     db.commit()
 
 
+# ---- KI-Builder: Entwurf → Vorschau → Aktivieren (Recht: builder) ----
+
+from pydantic import BaseModel  # noqa: E402
+
+from ..ai import llm  # noqa: E402
+from .activation import materialize  # noqa: E402
+from .definitions import parse_artifact  # noqa: E402
+from .models import BuilderDraft  # noqa: E402
+
+
+class DraftRequest(BaseModel):
+    description: str
+
+
+class DraftUpdate(BaseModel):
+    definition: dict
+
+
+def _draft_out(draft: BuilderDraft) -> dict:
+    return {
+        "id": draft.id, "kind": draft.kind, "status": draft.status,
+        "description_input": draft.description_input,
+        "definition": draft.definition,
+        "erklaerung": draft.erklaerung,
+        "created_at": draft.created_at,
+    }
+
+
+@router.post("/draft")
+def create_draft(
+    request: DraftRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_tenant_db),
+):
+    """Übersetzt eine deutsche Beschreibung in Builder-Entwürfe (Vorschau)."""
+    from .translator import translate
+
+    if not llm.is_available():
+        raise HTTPException(503, "KI nicht verfügbar (kein ANTHROPIC_API_KEY) — "
+                                 "bitte den manuellen Editor verwenden.")
+    result = translate(db, request.description)
+    if result is None:
+        raise HTTPException(502, "KI-Übersetzung fehlgeschlagen — bitte erneut versuchen "
+                                 "oder den manuellen Editor verwenden.")
+
+    drafts = []
+    for artifact in result.artefakte:
+        draft = BuilderDraft(
+            kind=artifact.kind,
+            description_input=request.description,
+            definition=artifact.model_dump(),
+            erklaerung=result.erklaerung,
+            rueckfragen=result.rueckfragen or None,
+            created_by=user.id,
+        )
+        db.add(draft)
+        drafts.append(draft)
+    db.commit()
+    return {
+        "erklaerung": result.erklaerung,
+        "rueckfragen": result.rueckfragen,
+        "drafts": [_draft_out(d) for d in drafts],
+    }
+
+
+@router.get("/drafts")
+def list_drafts(db: Session = Depends(get_tenant_db)):
+    drafts = (
+        db.query(BuilderDraft)
+        .filter(BuilderDraft.status == "vorschau")
+        .order_by(BuilderDraft.created_at.desc())
+        .all()
+    )
+    return [_draft_out(d) for d in drafts]
+
+
+def _get_draft(db: Session, draft_id: int) -> BuilderDraft:
+    draft = db.query(BuilderDraft).filter(BuilderDraft.id == draft_id).first()
+    if draft is None:
+        raise HTTPException(404, "Entwurf nicht gefunden")
+    if draft.status != "vorschau":
+        raise HTTPException(409, f"Entwurf ist bereits {draft.status}")
+    return draft
+
+
+@router.patch("/drafts/{draft_id}")
+def update_draft(draft_id: int, data: DraftUpdate, db: Session = Depends(get_tenant_db)):
+    """Nutzer hat die Vorschau im Editor angepasst — neu validieren."""
+    draft = _get_draft(db, draft_id)
+    try:
+        artifact = parse_artifact(draft.kind, data.definition)
+    except Exception as exc:
+        raise HTTPException(422, f"Definition ungültig: {exc}")
+    draft.definition = artifact.model_dump()
+    db.commit()
+    return _draft_out(draft)
+
+
+@router.post("/drafts/{draft_id}/activate")
+def activate_draft(draft_id: int, db: Session = Depends(get_tenant_db)):
+    draft = _get_draft(db, draft_id)
+    result = materialize(db, draft.kind, draft.definition)
+    draft.status = "aktiviert"
+    db.commit()
+    return {"activated": result}
+
+
+@router.post("/drafts/{draft_id}/discard")
+def discard_draft(draft_id: int, db: Session = Depends(get_tenant_db)):
+    draft = _get_draft(db, draft_id)
+    draft.status = "verworfen"
+    db.commit()
+    return _draft_out(draft)
+
+
 # ---- Records (Recht: custom:<slug>) ----
 
 def require_custom(

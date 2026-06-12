@@ -138,16 +138,120 @@ async function modulesTab(container) {
   }));
 }
 
+/* ---- KI-Builder: Beschreibung in normalem Deutsch → Vorschau → Aktivieren ---- */
+
+const KIND_LABELS = {
+  module: "Eigenes Modul", automation: "Automation",
+  widget: "Dashboard-Widget", workflow: "Genehmigungs-Workflow",
+};
+
+function draftCard(draft, onChange) {
+  const message = el("div");
+  const card = el("div", { class: "panel", style: "margin-bottom:14px" });
+  card.append(
+    el("h2", { style: "margin-top:0" },
+      el("span", { class: "pill" }, KIND_LABELS[draft.kind] || draft.kind), " ",
+      draft.definition.name || draft.definition.title || draft.definition.slug || ""));
+
+  if (draft.kind === "module") {
+    card.append(moduleEditor(
+      { ...draft.definition, slugLocked: false, saveLabel: "Vorschau übernehmen & aktivieren" },
+      async (definition, editorMessage) => {
+        await api(`/api/builder/drafts/${draft.id}`, { method: "PATCH", body: { definition } });
+        await api(`/api/builder/drafts/${draft.id}/activate`, { method: "POST" });
+        editorMessage.textContent = "Aktiviert! Das Modul erscheint in der Navigation.";
+        editorMessage.className = "success";
+        setTimeout(() => location.reload(), 900);
+      }));
+  } else {
+    card.append(el("pre", { class: "code" }, JSON.stringify(draft.definition, null, 2)));
+    card.append(el("button", {
+      class: "primary",
+      onclick: async () => {
+        message.textContent = ""; message.className = "";
+        try {
+          await api(`/api/builder/drafts/${draft.id}/activate`, { method: "POST" });
+          message.textContent = "Aktiviert!"; message.className = "success";
+          setTimeout(onChange, 700);
+        } catch (err) {
+          message.textContent = err.message; message.className = "error";
+        }
+      },
+    }, "Aktivieren"));
+  }
+
+  card.append(el("button", {
+    class: "ghost", style: "margin-left:8px",
+    onclick: async () => {
+      await api(`/api/builder/drafts/${draft.id}/discard`, { method: "POST" });
+      onChange();
+    },
+  }, "Verwerfen"), message);
+  return card;
+}
+
+async function aiBuilderSection(container) {
+  container.append(el("h2", {}, "Per KI bauen ",
+    el("span", { class: "hint" }, "— beschreiben Sie in normalem Deutsch, was Sie brauchen")));
+
+  const input = el("textarea", {
+    placeholder: "z. B.: Ich möchte unseren Fuhrpark verwalten — Kennzeichen, Marke, " +
+      "TÜV-Termin und Stammfahrer. Wenn der TÜV-Termin überschritten ist, soll " +
+      "automatisch eine Aufgabe entstehen. Und ich will eine Dashboard-Kachel mit " +
+      "der Anzahl der Fahrzeuge in der Werkstatt.",
+    style: "min-height:110px",
+  });
+  const button = el("button", { class: "primary" }, "Vorschlag erstellen");
+  const result = el("div", { style: "margin-top:14px" });
+  container.append(el("div", { class: "panel" },
+    el("div", { class: "field wide" }, input),
+    el("div", { style: "margin-top:10px" }, button)), result);
+
+  async function refreshDrafts() {
+    const drafts = await api("/api/builder/drafts");
+    const existing = container.querySelector("#draft-list");
+    if (existing) existing.remove();
+    if (!drafts.length) return;
+    const list = el("div", { id: "draft-list" }, el("h2", {}, "Offene Vorschläge"));
+    for (const draft of drafts) list.append(draftCard(draft, refreshDrafts));
+    container.append(list);
+  }
+
+  button.addEventListener("click", async () => {
+    const description = input.value.trim();
+    if (!description) return;
+    button.disabled = true;
+    result.innerHTML = "";
+    result.append(el("p", { class: "hint" }, "Die KI analysiert Ihre Anforderung …"));
+    try {
+      const data = await api("/api/builder/draft", { method: "POST", body: { description } });
+      result.innerHTML = "";
+      result.append(el("div", { class: "finding info" },
+        el("span", { class: "area" }, "KI-Vorschlag"), el("br"), data.erklaerung));
+      for (const frage of data.rueckfragen || [])
+        result.append(el("div", { class: "finding warnung" },
+          el("span", { class: "area" }, "Rückfrage"), el("br"), frage));
+      await refreshDrafts();
+    } catch (err) {
+      result.innerHTML = "";
+      result.append(el("p", { class: "error" }, err.message));
+    }
+    button.disabled = false;
+  });
+
+  await refreshDrafts();
+}
+
 export function registerBuilderPages() {
   registerPage("builder", {
     title: "Builder", nav: true, module: "builder",
     async render(main) {
       main.append(el("h2", {}, "Builder ",
         el("span", { class: "hint" }, "— passen Sie das KMU-OS an Ihr Unternehmen an")));
+      const aiContainer = el("div");
       const container = el("div");
-      main.append(container);
-      // Einhängepunkt für den KI-Übersetzer (Etappe 4)
-      main.append(el("div", { id: "builder-ai-slot" }));
+      main.append(aiContainer, container);
+      await aiBuilderSection(aiContainer);
       await modulesTab(container);
     },
   });
