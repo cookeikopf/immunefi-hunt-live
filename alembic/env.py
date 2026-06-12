@@ -17,6 +17,7 @@ from backend.app.modules.hr import models as hr_models  # noqa: F401
 from backend.app.modules.knowledge import models as knowledge_models  # noqa: F401
 from backend.app.modules.projects import models as projects_models  # noqa: F401
 from backend.app.ai.rag import vectorstore  # noqa: F401
+from backend.app.imports import models as import_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

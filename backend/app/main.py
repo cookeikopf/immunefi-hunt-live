@@ -14,6 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from .ai.router import router as ai_router
 from .core.config import get_settings
 from .core.database import init_db
+from .imports.router import router as imports_router
+from .modules.auth.admin_router import router as admin_router
 from .modules.auth.router import router as auth_router
 from .modules.crm.router import router as crm_router
 from .modules.finance.router import router as finance_router
@@ -48,6 +50,8 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(imports_router)
 app.include_router(crm_router)
 app.include_router(finance_router)
 app.include_router(hr_router)
