@@ -51,6 +51,7 @@ _STANDARD_EVENTS = [
     "hr.employee.created", "hr.absence.created",
     "projects.project.created", "projects.task.created", "projects.task.updated",
     "knowledge.document.created", "knowledge.document.updated",
+    "workflow.instance.completed",
 ]
 
 

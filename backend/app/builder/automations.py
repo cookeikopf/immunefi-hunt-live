@@ -330,7 +330,9 @@ def _load_trigger_object(db: Session, event: str, payload: dict):
 
 def _dispatch(event: str, payload: dict[str, Any]) -> None:
     tenant_id = payload.get("tenant_id")
-    if tenant_id is None or event.rsplit(".", 1)[-1] not in ("created", "updated", "deleted"):
+    if tenant_id is None:
+        return
+    if event.rsplit(".", 1)[-1] not in ("created", "updated", "deleted", "completed"):
         return
 
     depth = getattr(_local, "depth", 0)

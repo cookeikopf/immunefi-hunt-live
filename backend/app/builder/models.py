@@ -115,6 +115,54 @@ class Notification(TenantMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class WorkflowDefinition(TenantMixin, Base):
+    """Mehrstufiger Genehmigungsprozess, gestartet durch ein Event."""
+
+    __tablename__ = "workflow_definitions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    trigger_event: Mapped[str] = mapped_column(String(120), index=True)
+    steps: Mapped[list] = mapped_column(JsonColumn)  # [{name, approver_role}]
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class WorkflowInstance(TenantMixin, Base):
+    """Ein laufender Genehmigungsvorgang zu einem konkreten Objekt."""
+
+    __tablename__ = "workflow_instances"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    definition_id: Mapped[int] = mapped_column(ForeignKey("workflow_definitions.id"), index=True)
+    subject_ref: Mapped[str] = mapped_column(String(120))   # z. B. "hr.absence:12"
+    subject_summary: Mapped[str] = mapped_column(Text)
+    current_step: Mapped[int] = mapped_column(default=0)
+    status: Mapped[str] = mapped_column(String(20), default="offen", index=True)  # offen | genehmigt | abgelehnt
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+    definition: Mapped[WorkflowDefinition] = relationship()
+    approvals: Mapped[list["WorkflowApproval"]] = relationship(
+        back_populates="instance", cascade="all, delete-orphan"
+    )
+
+
+class WorkflowApproval(TenantMixin, Base):
+    __tablename__ = "workflow_approvals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    instance_id: Mapped[int] = mapped_column(ForeignKey("workflow_instances.id"), index=True)
+    step_index: Mapped[int] = mapped_column()
+    decision: Mapped[str] = mapped_column(String(20))  # genehmigt | abgelehnt
+    decided_by: Mapped[int] = mapped_column(ForeignKey("auth_users.id"))
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+    instance: Mapped[WorkflowInstance] = relationship(back_populates="approvals")
+
+
 class BuilderDraft(TenantMixin, Base):
     """Ein Builder-Entwurf: deutsche Beschreibung → validierte Definition →
     Vorschau → Aktivierung. Trägt den Bestätigen-Flow (Etappe 4)."""

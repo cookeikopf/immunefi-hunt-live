@@ -6,6 +6,7 @@ import { registerCorePages } from "./pages/core.js";
 import { registerModulePages } from "./pages/modules.js";
 import { registerAdminPages } from "./pages/admin.js";
 import { registerBuilderPages, ensureCustomModules } from "./pages/builder.js";
+import registerWorkflowPages from "./pages/workflows.js";
 
 export const state = { me: null, setupStatus: null };
 
@@ -92,6 +93,7 @@ registerAuthPages();
 registerCorePages();
 registerModulePages();
 registerBuilderPages();
+registerWorkflowPages();
 registerAdminPages();
 
 window.addEventListener("hashchange", route);

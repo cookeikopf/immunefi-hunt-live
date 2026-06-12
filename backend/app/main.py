@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .ai.router import router as ai_router
 from .builder.notifications_router import router as notifications_router
+from .builder.workflows_router import router as workflows_router
 from .builder.router import records_router as custom_records_router
 from .builder.router import router as builder_router
 from .core.config import get_settings
@@ -37,9 +38,11 @@ async def lifespan(app: FastAPI):
     init_db()
     from .ai.rag.indexer import register_event_handlers
     from .builder.automations import register_automation_handlers
+    from .builder.workflows import register_workflow_handlers
 
     register_event_handlers()
     register_automation_handlers()
+    register_workflow_handlers()
 
     from .builder import scheduler
 
@@ -71,6 +74,7 @@ app.include_router(knowledge_router)
 app.include_router(builder_router)
 app.include_router(custom_records_router)
 app.include_router(notifications_router)
+app.include_router(workflows_router)
 app.include_router(ai_router)
 
 
