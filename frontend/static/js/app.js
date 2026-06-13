@@ -57,7 +57,12 @@ export async function loadMe() {
   await ensureCustomModules(); // dynamische Seiten der Custom-Module registrieren
 }
 
+// Re-Entrancy-Schutz: zwei schnell aufeinanderfolgende Aufrufe (z. B. nach
+// einem Hash-Wechsel) dürfen sich nicht ins Gehege kommen und doppelt rendern.
+let routeToken = 0;
+
 async function route() {
+  const token = ++routeToken;
   const path = (location.hash.replace(/^#\//, "") || "dashboard").split("?")[0];
   const [routeName] = path.split("/");
   const page = pages.get(routeName) || pages.get("dashboard");
@@ -68,6 +73,7 @@ async function route() {
     if (!state.me) {
       try { await loadMe(); }
       catch { clearToken(); location.hash = "#/login"; return; }
+      if (token !== routeToken) return; // während loadMe kam ein neuer route()
     }
     header.style.display = "";
     nav.style.display = "";
@@ -81,7 +87,7 @@ async function route() {
   try {
     await page.render(main, path.split("/").slice(1));
   } catch (err) {
-    main.innerHTML = `<p class="error">${err.message}</p>`;
+    if (token === routeToken) main.innerHTML = `<p class="error">${err.message}</p>`;
   }
 }
 
@@ -98,9 +104,12 @@ registerAdminPages();
 
 window.addEventListener("hashchange", route);
 
-// Boot: Erstinstallation → Setup-Wizard
+// Boot: Erstinstallation → Setup-Wizard.
+// Wichtig: Wenn wir den Hash ändern, übernimmt das hashchange-Event den
+// route()-Aufruf — sonst rendern wir doppelt. Nur ohne Hash-Wechsel selbst routen.
 state.setupStatus = await api("/api/setup/status").catch(() => null);
 if (state.setupStatus?.needs_setup && !location.hash.startsWith("#/setup")) {
-  location.hash = "#/setup";
+  location.hash = "#/setup"; // löst hashchange → route() aus
+} else {
+  route();
 }
-route();
