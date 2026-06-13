@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KMU-OS</title>
+<style>
+  /* iOS-inspiriertes Design: System-Font, weiches Grau, iOS-Blau,
+     großzügige Radien, Hairline-Trenner und weiche Schatten. */
+  :root {
+    --bg: #f2f2f7; --card: #ffffff; --ink: #1c1c1e; --muted: #8e8e93;
+    --accent: #007aff; --accent-soft: #e8f1ff;
+    --ok: #30a14e; --warn: #c98a00; --crit: #e0362d;
+    --border: #e5e5ea; --fill: #f2f2f7;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
+    --radius: 16px; --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+      system-ui, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px; line-height: 1.45;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  }
+  header {
+    padding: 14px 28px; background: rgba(255,255,255,.8);
+    backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px;
+    flex-wrap: wrap; position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -.02em; cursor: pointer; }
+  header h1 em { color: var(--accent); font-style: normal; }
+  header .sub { color: var(--muted); font-size: 14px; }
+  header .spacer { flex: 1; }
+  header .who { color: var(--muted); font-size: 13px; }
+  nav {
+    display: flex; gap: 4px; padding: 8px 24px; background: var(--card);
+    border-bottom: 1px solid var(--border); overflow-x: auto;
+  }
+  nav a {
+    text-decoration: none; font-size: 14px; font-weight: 500; padding: 7px 14px;
+    color: var(--muted); border-radius: 980px; white-space: nowrap; transition: background .15s, color .15s;
+  }
+  nav a:hover { color: var(--ink); }
+  nav a.active { color: var(--accent); background: var(--accent-soft); }
+  main { padding: 26px 28px 60px; max-width: 1100px; margin: 0 auto; }
+  h2 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 30px 0 14px; }
+  h2:first-child { margin-top: 0; }
+  .hint { color: var(--muted); font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+  .card .label { font-size: 13px; color: var(--muted); font-weight: 500; }
+  .card .value { font-size: 30px; font-weight: 600; letter-spacing: -.02em; margin-top: 6px; }
+  .card .value.eur::after { content: " €"; font-size: 17px; color: var(--muted); font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 15px; }
+  th { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  form.panel, .panel { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+  .frow { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; min-width: 180px; flex: 1; }
+  .field.wide { flex-basis: 100%; }
+  .field label { font-size: 13px; font-weight: 500; color: var(--muted); }
+  input, select, textarea {
+    padding: 12px 14px; font: inherit; font-size: 16px; color: var(--ink);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); width: 100%;
+    transition: border-color .15s, box-shadow .15s; -webkit-appearance: none; appearance: none;
+  }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238e8e93' d='M6 8 0 2l1.4-1.4L6 5.2 10.6.6 12 2z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3.5px rgba(0,122,255,.15); }
+  textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+  button { font: inherit; cursor: pointer; }
+  button.primary {
+    background: var(--accent); color: #fff; border: none; padding: 12px 22px;
+    border-radius: var(--radius-sm); font-size: 16px; font-weight: 600; transition: opacity .15s, transform .05s;
+  }
+  button.primary:hover { opacity: .92; }
+  button.primary:active { transform: scale(.985); }
+  button.primary:disabled { opacity: .45; cursor: wait; }
+  button.ghost {
+    background: var(--card); border: 1px solid var(--border); padding: 9px 16px;
+    border-radius: var(--radius-sm); color: var(--accent); font-weight: 500; transition: background .15s;
+  }
+  button.ghost:hover { background: var(--fill); }
+  button.small { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
+  .pill { display: inline-block; padding: 3px 11px; border-radius: 980px; background: var(--fill); color: var(--muted); font-size: 13px; font-weight: 500; }
+  .pill.ok { background: #e3f6e8; color: var(--ok); }
+  .pill.warn { background: #fbf0d8; color: var(--warn); }
+  .pill.crit { background: #fde4e2; color: var(--crit); }
+  .finding {
+    padding: 12px 16px; border-left: 3px solid var(--muted); background: var(--card);
+    border-radius: var(--radius-sm); margin-bottom: 10px; font-size: 15px; box-shadow: var(--shadow);
+  }
+  .finding.kritisch { border-left-color: var(--crit); }
+  .finding.warnung { border-left-color: var(--warn); }
+  .finding.info { border-left-color: var(--ok); }
+  .finding .area { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  #chat-log { background: var(--card); border-radius: var(--radius); padding: 20px; min-height: 220px; max-height: 480px; overflow-y: auto; box-shadow: var(--shadow); }
+  .msg { margin-bottom: 16px; line-height: 1.5; }
+  .msg.user { color: var(--accent); }
+  .msg .who { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 2px; }
+  .msg pre { white-space: pre-wrap; font: inherit; margin: 0; }
+  .sources { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .error { color: var(--crit); font-size: 14px; margin: 10px 0; }
+  .success { color: var(--ok); font-size: 14px; margin: 10px 0; }
+  .auth-wrap { max-width: 400px; margin: 9vh auto 40px; padding: 0 20px; }
+  .auth-wrap h1 { font-size: 34px; font-weight: 700; letter-spacing: -.03em; text-align: center; margin: 0 0 6px; }
+  .auth-wrap h1 em { color: var(--accent); font-style: normal; }
+  .auth-wrap > .hint, .auth-wrap > p { text-align: center; }
+  .tabs { display: inline-flex; gap: 2px; margin-bottom: 18px; background: var(--fill); padding: 3px; border-radius: var(--radius-sm); }
+  .tabs button { background: none; border: none; border-radius: 8px; padding: 7px 16px; color: var(--ink); font-size: 14px; font-weight: 500; transition: background .15s; }
+  .tabs button.active { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .matrix td, .matrix th { text-align: center; }
+  .matrix td:first-child, .matrix th:first-child { text-align: left; }
+  .row-actions { display: flex; gap: 8px; }
+  pre.code { background: var(--fill); border-radius: var(--radius-sm); padding: 14px; font-size: 13px; font-family: ui-monospace, "SF Mono", Menlo, monospace; overflow-x: auto; }
+  #ai-suggestions { background: var(--card); border-radius: var(--radius); padding: 20px; white-space: pre-wrap; line-height: 1.6; box-shadow: var(--shadow); }
+</style>
+</head>
+<body>
+  <header id="header" style="display:none">
+    <h1 onclick="location.hash='#/dashboard'">KMU-<em>OS</em></h1>
+    <span class="sub" id="company"></span>
+    <span class="pill" id="ai-status"></span>
+    <span class="spacer"></span>
+    <span class="who" id="who"></span>
+    <button class="ghost small" id="logout">Abmelden</button>
+  </header>
+  <nav id="nav" style="display:none"></nav>
+  <main id="main"></main>
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

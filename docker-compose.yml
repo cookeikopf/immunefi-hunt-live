@@ -1,0 +1,36 @@
+# KMU-OS — Start mit einem Befehl:
+#   docker compose up -d          → SQLite (Standard, Self-Hosted)
+#   docker compose --profile postgres up -d   → mit PostgreSQL (SaaS/größere Installationen)
+#
+# Danach: http://localhost:8000 öffnen → Setup-Wizard.
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - kmuos-data:/data
+    environment:
+      KMUOS_SECRET_KEY: ${KMUOS_SECRET_KEY:?KMUOS_SECRET_KEY in .env setzen}
+      KMUOS_ALLOW_SIGNUP: ${KMUOS_ALLOW_SIGNUP:-false}
+      KMUOS_DATABASE_URL: ${KMUOS_DATABASE_URL:-sqlite:////data/kmuos.db}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: kmuos
+      POSTGRES_USER: kmuos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD in .env setzen}
+    volumes:
+      - kmuos-pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    # Für Postgres in .env setzen:
+    # KMUOS_DATABASE_URL=postgresql+psycopg2://kmuos:<passwort>@postgres:5432/kmuos
+
+volumes:
+  kmuos-data:
+  kmuos-pgdata:
