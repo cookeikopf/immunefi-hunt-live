@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..modules.auth.deps import get_current_user, get_tenant_db, require_module
 from ..modules.auth.models import User
 from . import llm
+from . import models as _ai_models  # noqa: F401 — registriert AiConversation/AiMessage/KpiSnapshot auf Base.metadata
 from .assistant import ask
 from .datahub import collect_kpis
 from .insights import generate_insights
